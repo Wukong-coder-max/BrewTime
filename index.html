@@ -2,7 +2,15 @@
 <html lang="zh-CN" data-theme="light">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" media="(prefers-color-scheme:light)" content="#f3eae0">
+<meta name="theme-color" media="(prefers-color-scheme:dark)" content="#160f09">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="萃时">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>萃时 · BrewTime</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2028%2028'%3E%3Cg%20transform='rotate(-28%2014%2014)'%3E%3Cellipse%20cx='14'%20cy='14'%20rx='8'%20ry='11.5'%20fill='%23c8772e'/%3E%3Cpath%20d='M14%203.8%20C%209.5%209,%2018.5%2019,%2014%2024.2'%20fill='none'%20stroke='%23f3eae0'%20stroke-width='2.2'%20stroke-linecap='round'/%3E%3C/g%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -223,6 +231,46 @@
   .fab:hover{transform:scale(1.08) rotate(90deg); box-shadow:0 18px 38px -8px rgba(200,119,46,.7)}
 
   .foot{margin-top:52px; text-align:center; font-family:var(--disp); font-style:italic; font-size:17px; color:var(--caramel); letter-spacing:.5px}
+  /* 安全区（刘海屏 / PWA 全屏） */
+  .topctrl{top:calc(18px + env(safe-area-inset-top)); right:calc(18px + env(safe-area-inset-right))}
+  .fab{right:calc(24px + env(safe-area-inset-right)); bottom:calc(24px + env(safe-area-inset-bottom))}
+  .wrap{padding-top:calc(26px + env(safe-area-inset-top))}
+
+  /* 平板及以下 */
+  @media(max-width:680px){
+    .cal-top{flex-wrap:wrap; gap:10px}
+    .stat .v{font-size:22px}
+  }
+  /* 手机 */
+  @media(max-width:560px){
+    .wrap{padding:calc(18px + env(safe-area-inset-top)) 15px 120px}
+    .brand h1{font-size:27px; letter-spacing:3px}
+    .brand .zh{font-size:28px}
+    .brand .bean{width:19px; height:19px}
+    .slogan{font-size:13px; letter-spacing:1px}
+    nav button{padding:8px 4px 13px}
+    nav button .zh2{font-size:14.5px; letter-spacing:1.5px}
+    .card{padding:18px; border-radius:18px}
+    .hero{flex-direction:column; align-items:center; text-align:center; gap:16px}
+    .ring{width:128px; height:128px}
+    .heroinfo{width:100%}
+    .caf-row{justify-content:center}
+    .meta2{text-align:center}
+    .types{grid-template-columns:repeat(2,1fr)}
+    .p-name{font-size:30px}
+    .p-glyph{font-size:52px}
+    .p-rungnames span{font-size:9px}
+    .barchart{height:140px; gap:8px}
+    .foot{font-size:16px; margin-top:44px}
+    .topctrl button{width:38px; height:38px; font-size:16px}
+    .fab{width:54px; height:54px; font-size:30px}
+  }
+  /* 超窄屏 */
+  @media(max-width:360px){
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .cal-cell .dnum{font-size:14px}
+    .cal-cell .dcup{font-size:9px}
+  }
 </style>
 </head>
 <body>
@@ -573,17 +621,32 @@ function drawBean(x,cx,cy,h,fill,crease){
   x.restore();
 }
 function wrapLines(x,text,maxW,maxLines){
-  const chars=[...text]; let line='',lines=[];
-  for(const ch of chars){ if(x.measureText(line+ch).width>maxW){ lines.push(line); line=ch; if(lines.length===maxLines-1) {} } else line+=ch; if(lines.length>=maxLines) break; }
-  if(lines.length<maxLines && line) lines.push(line); else if(line && lines.length===maxLines){ lines[maxLines-1]=lines[maxLines-1].slice(0,-1)+'…'; }
+  const tokens=text.match(/[0-9A-Za-z.,:%％¥/+\-]+|\s+|[\s\S]/g)||[];
+  const lines=[]; let line='';
+  for(const t of tokens){
+    if(x.measureText(line+t).width>maxW && line.trim()){
+      lines.push(line.replace(/\s+$/,''));
+      if(lines.length>=maxLines){ line=''; break; }
+      line = /^\s+$/.test(t) ? '' : t;
+    } else { line+=t; }
+  }
+  if(line.trim() && lines.length<maxLines) lines.push(line.replace(/\s+$/,''));
   return lines;
 }
 async function saveCard(){
   const r=computePersona();
   if(r.key==='dev'){ alert('再记录几杯、生成咖格后即可保存分享卡。'); return; }
   try{ if(document.fonts&&document.fonts.ready) await document.fonts.ready; }catch(e){}
-  const W=1080,H=1520, c=document.createElement('canvas'); c.width=W; c.height=H; const x=c.getContext('2d');
+  const W=1080;
   const cream='#f2e7d6', gold='#d9a05b', crema='#c8772e', dim='#cdb79f', cjk='"Noto Serif SC","Songti SC",serif';
+  const tw=W-220;
+  // 先按文段行数决定卡片高度，保证上下留白
+  const mc=document.createElement('canvas').getContext('2d'); mc.font='29px '+cjk;
+  const blurbLines=wrapLines(mc,r.blurb,tw,4);
+  const blurbY0=1352, lineGap=46;
+  const footerY=blurbY0+(blurbLines.length-1)*lineGap+96;
+  const H=Math.round(footerY+82);
+  const c=document.createElement('canvas'); c.width=W; c.height=H; const x=c.getContext('2d');
   // background
   const g=x.createRadialGradient(160,140,80,160,140,1500); g.addColorStop(0,'#3c2718'); g.addColorStop(.55,'#271a11'); g.addColorStop(1,'#150e08');
   x.fillStyle=g; x.fillRect(0,0,W,H);
@@ -630,18 +693,18 @@ async function saveCard(){
   });
   x.textBaseline='alphabetic';
   // traits
-  const tx0=110, tw=W-220;
+  const tx0=110;
   r.traits.forEach((t,i)=>{ const tyy=946+i*98;
     x.textAlign='left'; x.fillStyle=dim; x.font='28px '+cjk; x.fillText(t.k, tx0, tyy);
     x.textAlign='right'; x.fillStyle=cream; x.font='600 28px '+cjk; x.fillText(String(t.v), tx0+tw, tyy);
     x.fillStyle='rgba(255,255,255,.12)'; roundRect(x,tx0,tyy+16,tw,14,7); x.fill();
     const v=Math.min(t.v,100); if(v>0){ const lg=x.createLinearGradient(tx0,0,tx0+tw,0); lg.addColorStop(0,gold); lg.addColorStop(1,crema); x.fillStyle=lg; roundRect(x,tx0,tyy+16,tw*v/100,14,7); x.fill(); }
   });
-  // blurb
+  // blurb（居中、按词换行）
   x.textAlign='center'; x.fillStyle='#e3d4bf'; x.font='29px '+cjk;
-  wrapLines(x,r.blurb,tw,3).forEach((ln,i)=>x.fillText(ln,W/2,1352+i*44));
-  // footer
-  x.fillStyle=gold; x.font='italic 27px Georgia,serif'; x.fillText('You may forget. Caffeine remembers.', W/2, H-66);
+  blurbLines.forEach((ln,i)=>x.fillText(ln,W/2,blurbY0+i*lineGap));
+  // footer（与文段拉开间隔，并与底部留白）
+  x.fillStyle=gold; x.font='italic 27px Georgia,serif'; x.fillText('You may forget. Caffeine remembers.', W/2, footerY);
   // download
   c.toBlob(b=>{ if(!b){alert('生成失败，请重试');return;} const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='萃时-咖格-'+r.tier.name+'.png'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),3000); }, 'image/png');
 }
@@ -704,6 +767,9 @@ $('#clearBtn').onclick=()=>{if(confirm('确定清空全部记录？此操作不�
 document.querySelectorAll('.scrim').forEach(s=>s.addEventListener('click',e=>{if(e.target===s)s.classList.remove('open');}));
 
 applyTheme(); buildTypes(); render(); moveIndicator();
+if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('service-worker.js').catch(()=>{}));
+}
 </script>
 </body>
 </html>
